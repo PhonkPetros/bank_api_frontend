@@ -1,13 +1,13 @@
 <template>
   <div class="approval-queue">
-    <h2>Approval Queue</h2>
+    <h2>Customer Approval Queue</h2>
 
     <div v-if="loading" class="loading-message">
       Loading unapproved customers...
     </div>
 
     <div v-if="error" class="error-message">
-      Error fetching unapproved customers: {{ error }}
+      {{ error }}
     </div>
 
     <div v-if="!loading && !error && unapprovedCustomers.length === 0" class="no-customers-message">
@@ -30,12 +30,18 @@
             <td>{{ customer.firstName }} {{ customer.lastName }}</td>
             <td>{{ customer.email }}</td>
             <td>{{ customer.bsn }}</td>
-            <td>{{ customer.phoneNumber }}</td>
+            <td>{{ customer.phone }}</td>
             <td>
-              <button @click="handleApproveCustomer(customer.id)" :disabled="customer.approving" class="approve-btn">
+              <button 
+                @click="handleApproveCustomer(customer.id)" 
+                :disabled="customer.approving" 
+                class="approve-btn"
+              >
                 {{ customer.approving ? 'Approving...' : 'Approve' }}
               </button>
-              <span v-if="customer.approvalError" class="approval-error">{{ customer.approvalError }}</span>
+              <span v-if="customer.approvalError" class="approval-error">
+                {{ customer.approvalError }}
+              </span>
             </td>
           </tr>
         </tbody>
@@ -57,7 +63,11 @@ const fetchUnapprovedCustomers = async () => {
   error.value = null;
   try {
     const response = await getUnapprovedCustomers();
-    unapprovedCustomers.value = response.data.map(customer => ({ ...customer, approving: false, approvalError: null }));
+    unapprovedCustomers.value = response.data.map(customer => ({
+      ...customer,
+      approving: false,
+      approvalError: null
+    }));
   } catch (err) {
     console.error('Failed to fetch unapproved customers:', err);
     error.value = err.response?.data?.message || err.message || 'An unexpected error occurred.';
@@ -75,13 +85,11 @@ const handleApproveCustomer = async (customerId) => {
 
   try {
     await approveCustomer(customerId);
-    // Refresh the list after approval
-    // Alternatively, remove the customer from the list locally for better UX
+    // Remove the approved customer from the list
     unapprovedCustomers.value = unapprovedCustomers.value.filter(c => c.id !== customerId);
-    // Optionally, show a success message
   } catch (err) {
     console.error(`Failed to approve customer ${customerId}:`, err);
-    customer.approvalError = err.response?.data?.message || err.message || 'Failed to approve.';
+    customer.approvalError = err.response?.data?.message || err.message || 'Failed to approve customer.';
   } finally {
     customer.approving = false;
   }
@@ -90,80 +98,88 @@ const handleApproveCustomer = async (customerId) => {
 onMounted(() => {
   fetchUnapprovedCustomers();
 });
-
 </script>
 
 <style scoped>
 .approval-queue {
   padding: 20px;
-  border: 1px solid #eee;
-  margin-top: 10px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .loading-message,
 .error-message,
 .no-customers-message {
-  padding: 10px;
+  padding: 15px;
   border-radius: 4px;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
+  text-align: center;
 }
 
 .loading-message {
-  background-color: #e3f2fd; /* Light blue */
-  color: #1e88e5;
+  background-color: #e3f2fd;
+  color: #1976d2;
 }
 
-.error-message,
-.approval-error {
-  background-color: #ffebee; /* Light red */
+.error-message {
+  background-color: #ffebee;
   color: #c62828;
 }
 
-.approval-error {
-    display: block;
-    font-size: 0.9em;
-    margin-top: 5px;
-}
-
 .no-customers-message {
-  background-color: #f9f9f9;
-  color: #555;
+  background-color: #f5f5f5;
+  color: #616161;
 }
 
 .customers-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 15px;
+  margin-top: 20px;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .customers-table th,
 .customers-table td {
-  border: 1px solid #ddd;
-  padding: 10px;
+  padding: 12px;
   text-align: left;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .customers-table th {
-  background-color: #f2f2f2;
-  font-weight: bold;
+  background-color: #f5f5f5;
+  font-weight: 600;
+  color: #424242;
+}
+
+.customers-table tr:hover {
+  background-color: #fafafa;
 }
 
 .approve-btn {
-  padding: 6px 12px;
-  background-color: #4CAF50; /* Green */
+  padding: 8px 16px;
+  background-color: #4caf50;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
+  font-size: 14px;
+  transition: background-color 0.2s;
 }
 
-.approve-btn:hover {
-  background-color: #45a049;
+.approve-btn:hover:not(:disabled) {
+  background-color: #43a047;
 }
 
 .approve-btn:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+}
+
+.approval-error {
+  display: block;
+  color: #c62828;
+  font-size: 12px;
+  margin-top: 4px;
 }
 </style> 

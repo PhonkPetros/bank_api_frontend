@@ -2,17 +2,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import WelcomeView from '../views/WelcomeView.vue'
-import HomeView from '../views/HomeView.vue'
+import Atm from '@/views/customer/Atm.vue'
+import Transfer from '@/views/customer/Transfer.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    {
-      path: '/',
-      name: 'home',
-      component: HomeView,
-      meta: { requiresAuth: true, requiresApproval: true, role: 'CUSTOMER' }
-    },
     {
       path: '/welcome',
       name: 'welcome',
@@ -31,9 +26,7 @@ const router = createRouter({
     },
     {
       path: '/employee/dashboard',
-      name: 'employee-dashboard',
-      component: () => import('../views/employee/EmployeeDashboard.vue'),
-      meta: { requiresAuth: true, role: 'EMPLOYEE' },
+      redirect: '/employee/customer-management'
     },
     {
       path: '/employee/customer-management',
@@ -58,6 +51,41 @@ const router = createRouter({
       name: 'employee-account-settings',
       component: () => import('../views/employee/AccountSettings.vue'),
       meta: { requiresAuth: true, role: 'EMPLOYEE' }
+    },
+    {
+      path: '/employee/all-transfers',
+      name: 'employee-all-transfers',
+      component: () => import('../views/employee/AllTransfers.vue'),
+      meta: { requiresAuth: true, role: 'EMPLOYEE' }
+    },
+    {
+      path: '/customer/atm',
+      name: 'CustomerAtm',
+      component: Atm,
+      meta: { requiresAuth: true, role: 'CUSTOMER', requiresApproval: true }
+    },
+    {
+      path: '/customer/transfer',
+      component: Transfer
+    },
+    {
+      path: '/',
+      redirect: (to) => {
+        const userString = localStorage.getItem('user');
+        let user = null;
+        try {
+          user = userString ? JSON.parse(userString) : {};
+        } catch (e) {
+          user = {};
+        }
+        if (user && user.role === 'EMPLOYEE') {
+          return '/employee/customer-management';
+        } else if (user && user.role === 'CUSTOMER') {
+          return '/customer/atm';
+        } else {
+          return '/login';
+        }
+      }
     },
     {
       path: '/:pathMatch(.*)*',
@@ -116,8 +144,8 @@ router.beforeEach((to, from, next) => {
   } else if (isLoggedIn && (to.path === '/login' || to.path === '/register')) {
     console.log(`Decision: Logged in, trying to access ${to.path}. Redirecting based on role.`);
     if (userRole === 'EMPLOYEE') {
-      console.log('Redirecting EMPLOYEE to /employee/dashboard');
-      next('/employee/dashboard');
+      console.log('Redirecting EMPLOYEE to /employee/customer-management');
+      next('/employee/customer-management');
     } else if (userRole === 'CUSTOMER') {
       const redirectTo = isUserApproved ? '/' : '/welcome';
       console.log(`Redirecting CUSTOMER to ${redirectTo}`);

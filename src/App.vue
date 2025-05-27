@@ -1,17 +1,23 @@
-
 <template>
-  <router-view></router-view>
+  <div id="app">
+    <AppNavbar />
+    <router-view />
+  </div>
 </template>
 
-<style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+<script setup>
+import AppNavbar from '@/components/AppNavbar.vue';
+</script>
 
+<style>
 body {
-  font-family: Arial, sans-serif;
-  line-height: 1.6;
+  margin: 0;
+  font-family: 'Roboto', Arial, sans-serif;
+  background: #fafafa;
+}
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 </style>

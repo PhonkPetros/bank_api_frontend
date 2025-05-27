@@ -40,12 +40,14 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axiosInstance from '@/config/axios'
 import { API_ENDPOINTS } from '@/config/api'
+import { useEventBus } from '@/composables/useEventBus'
 
 const router = useRouter()
+const eventBus = useEventBus()
 const email = ref('')
 const password = ref('')
 const showEmailError = ref(false)
@@ -94,32 +96,57 @@ const handleLogin = async () => {
     })
     
     // Store the token and user info in localStorage
+    console.log('Login response:', response.data)
+    console.log('Token from response:', response.data.token)
+    
     localStorage.setItem('token', response.data.token)
+    console.log('Token stored in localStorage:', localStorage.getItem('token'))
+    
     localStorage.setItem('user', JSON.stringify({
       id: response.data.id,
       email: response.data.email,
       role: response.data.role,
       approved: response.data.approved
     }))
+    console.log('User stored in localStorage:', localStorage.getItem('user'))
+    
+    // Emit login event to update navbar
+    const emittedUserData = {
+      id: response.data.id,
+      email: response.data.email,
+      role: response.data.role,
+      approved: response.data.approved
+    };
+    eventBus.emit('user-logged-in', emittedUserData);
     
     const userRole = response.data.role;
     const isApproved = response.data.approved;
 
+    // Wait a moment to ensure localStorage is updated
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     if (userRole === 'EMPLOYEE') {
-      router.push('/employee/dashboard');
+      nextTick(() => {
+        router.push('/employee/customer-management');
+      });
     } else if (userRole === 'CUSTOMER') {
       if (isApproved) {
-        router.push('/');
+        nextTick(() => {
+          router.push('/customer/atm');
+        });
       } else {
-        router.push('/welcome');
+        nextTick(() => {
+          router.push('/welcome');
+        });
       }
     } else {
-      console.warn('Unknown user role, redirecting to home.');
-      router.push('/');
+      console.warn('Unknown user role after login, redirecting to /login.');
+      nextTick(() => {
+        router.push('/login');
+      });
     }
   } catch (err) {
     console.error('Login failed:', err);
-    // loading.value = false; // Already in finally block
 
     if (err.response && err.response.data) {
       const errorData = err.response.data; // This is likely the string from backend
@@ -160,7 +187,9 @@ const handleLogin = async () => {
         
         // Perform hard redirect to welcome page
         // This was used previously and can be more robust for SPA guard interactions on initial unapproved login.
-        window.location.href = '/welcome'; 
+        nextTick(() => {
+          window.location.href = '/welcome'; 
+        });
         return; // Important to exit further error handling after redirect initiated
 
       } else if (serverMessage.includes('Invalid email or password') || serverMessage.includes('User not found')) {

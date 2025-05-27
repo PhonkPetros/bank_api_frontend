@@ -12,12 +12,19 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
+    console.log('Request interceptor - Token exists:', !!token)
+    console.log('Request interceptor - Full token:', token)
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+      console.log('Request interceptor - Added token to headers:', config.headers.Authorization)
+      console.log('Request interceptor - Full config:', config)
+    } else {
+      console.warn('Request interceptor - No token found in localStorage')
     }
     return config
   },
   (error) => {
+    console.error('Request interceptor error:', error)
     return Promise.reject(error)
   }
 )
@@ -26,11 +33,18 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.error('Response interceptor - Error details:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+      headers: error.response?.headers,
+      config: error.config
+    })
+    
     if (error.response?.status === 401) {
-      // Clear local storage and redirect to login
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+      console.warn('Response interceptor - 401 Unauthorized')
+      // Don't clear storage or redirect on 401, let the component handle it
+      // This prevents the infinite redirect loop
     }
     return Promise.reject(error)
   }
