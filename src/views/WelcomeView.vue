@@ -8,15 +8,21 @@
         <p>You will be able to access all banking features once your account is approved.</p>
         <p>We will notify you via email when your account is ready.</p>
       </div>
-      <router-link to="/login" class="back-btn">Back to Login</router-link>
+      <button @click="handleLogout" class="back-btn">Back to Login</button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { logout } from '@/utils/sessionManager'
 
 const router = useRouter()
+
+const handleLogout = () => {
+  logout()
+  router.push('/login')
+}
 </script>
 
 <style scoped>
@@ -60,18 +66,18 @@ h1 {
 }
 
 .back-btn {
-  display: inline-block;
-  background-color: #4a90e2;
+  background-color: #1976d2;
   color: white;
-  text-decoration: none;
-  padding: 0.75rem 2rem;
+  border: none;
+  padding: 12px 24px;
   border-radius: 4px;
   font-size: 1rem;
-  transition: background-color 0.3s ease;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 .back-btn:hover {
-  background-color: #357abd;
+  background-color: #1565c0;
 }
 
 @media (max-width: 480px) {

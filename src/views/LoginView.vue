@@ -45,6 +45,7 @@ import { useRouter } from 'vue-router'
 import axiosInstance from '@/config/axios'
 import { API_ENDPOINTS } from '@/config/api'
 import { useEventBus } from '@/composables/useEventBus'
+import { clearSession } from '@/utils/sessionManager'
 
 const router = useRouter()
 const eventBus = useEventBus()
@@ -56,34 +57,43 @@ const loading = ref(false)
 
 const validateForm = () => {
   let isValid = true
+  const errors = {
+    email: '',
+    password: ''
+  }
   
-  // Reset errors
-  showEmailError.value = false
-  passwordError.value = ''
-  
-  if (!email.value) {
-    showEmailError.value = true
-    passwordError.value = 'Email is required'
+  // Email validation
+  if (!email.value.trim()) {
+    errors.email = 'Email is required'
     isValid = false
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
-    showEmailError.value = true
-    passwordError.value = 'Please enter a valid email address'
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
+    errors.email = 'Please enter a valid email address'
     isValid = false
   }
   
+  // Password validation
   if (!password.value) {
-    passwordError.value = 'Password is required'
+    errors.password = 'Password is required'
+    isValid = false
+  } else if (password.value.length < 6) {
+    errors.password = 'Password must be at least 6 characters long'
     isValid = false
   }
+  
+  // Update error states
+  showEmailError.value = !!errors.email
+  passwordError.value = errors.password
   
   return isValid
 }
 
 const handleLogin = async () => {
+  // Reset error states
   showEmailError.value = false
   passwordError.value = ''
   loading.value = true
   
+  // Validate form before submission
   if (!validateForm()) {
     loading.value = false
     return
@@ -91,120 +101,118 @@ const handleLogin = async () => {
   
   try {
     const response = await axiosInstance.post(API_ENDPOINTS.LOGIN, {
-      email: email.value,
+      email: email.value.trim(),
       password: password.value
     })
     
-    // Store the token and user info in localStorage
-    console.log('Login response:', response.data)
-    console.log('Token from response:', response.data.token)
+    const userData = {
+      id: response.data.id,
+      email: response.data.email,
+      role: response.data.role,
+      approved: response.data.approved
+    }
     
+    // Store the token and user info
     localStorage.setItem('token', response.data.token)
-    console.log('Token stored in localStorage:', localStorage.getItem('token'))
+    localStorage.setItem('user', JSON.stringify(userData))
     
-    localStorage.setItem('user', JSON.stringify({
-      id: response.data.id,
-      email: response.data.email,
-      role: response.data.role,
-      approved: response.data.approved
-    }))
-    console.log('User stored in localStorage:', localStorage.getItem('user'))
+    // Emit login event to update navbar immediately
+    eventBus.emit('user-logged-in', userData)
     
-    // Emit login event to update navbar
-    const emittedUserData = {
-      id: response.data.id,
-      email: response.data.email,
-      role: response.data.role,
-      approved: response.data.approved
-    };
-    eventBus.emit('user-logged-in', emittedUserData);
-    
-    const userRole = response.data.role;
-    const isApproved = response.data.approved;
+    const userRole = response.data.role
+    const isApproved = response.data.approved
 
-    // Wait a moment to ensure localStorage is updated
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Wait for state updates
+    await nextTick()
 
     if (userRole === 'EMPLOYEE') {
-      nextTick(() => {
-        router.push('/employee/customer-management');
-      });
+      router.push('/employee/customer-management')
     } else if (userRole === 'CUSTOMER') {
-      if (isApproved) {
-        nextTick(() => {
-          router.push('/customer/atm');
-        });
-      } else {
-        nextTick(() => {
-          router.push('/welcome');
-        });
-      }
+      router.push(isApproved ? '/customer/atm' : '/welcome')
     } else {
-      console.warn('Unknown user role after login, redirecting to /login.');
-      nextTick(() => {
-        router.push('/login');
-      });
+      console.warn('Unknown user role after login')
+      clearSession()
+      router.push('/login')
     }
   } catch (err) {
-    console.error('Login failed:', err);
+    console.error('Login failed:', err)
+    clearSession()
 
-    if (err.response && err.response.data) {
-      const errorData = err.response.data; // This is likely the string from backend
-      let serverMessage = '';
+    // Handle specific error cases
+    if (err.response) {
+      const status = err.response.status
+      const data = err.response.data
+      let errorMessage = ''
 
-      if (typeof errorData === 'string') {
-        serverMessage = errorData;
-      } else if (typeof errorData === 'object' && errorData.message) { // If backend sends JSON like {message: "..."}
-        serverMessage = errorData.message;
-      } else if (typeof errorData === 'object') { // If backend sends other JSON without .message
-        serverMessage = 'An error occurred processing the response.'; 
-      } else {
-        serverMessage = 'An unknown error occurred during login.';
+      // Handle different types of error responses
+      if (typeof data === 'string') {
+        errorMessage = data
+      } else if (data && typeof data === 'object') {
+        errorMessage = data.message || data.error || 'Login failed'
       }
 
-      // Check for "pending approval"
-      if (serverMessage.includes('pending approval')) {
-        let role = 'CUSTOMER'; // Default role
-        const approved = false; // User is pending approval
+      switch (status) {
+        case 400:
+          if (errorMessage.includes('pending approval')) {
+            let role = 'CUSTOMER'
+            const roleMatch = errorMessage.match(/Role: (\w+)/)
+            if (roleMatch && roleMatch[1]) {
+              role = roleMatch[1]
+            }
 
-        // Attempt to parse role from the backend string: "User account is pending approval. Role: ROLENAME, Approved: false"
-        const roleMatch = serverMessage.match(/Role: (\w+)/);
-        if (roleMatch && roleMatch[1]) {
-            role = roleMatch[1];
-        }
-        // Note: The 'Approved' status from such a string for a DisabledException should inherently be false.
+            const pendingUserData = {
+              email: email.value.trim(),
+              role: role,
+              approved: false
+            }
+            localStorage.setItem('user', JSON.stringify(pendingUserData))
+            localStorage.removeItem('token')
 
-        localStorage.setItem('user', JSON.stringify({
-          email: email.value, // Get email from form
-          role: role,
-          approved: approved
-          // ID is not available from the current backend string response for this case
-        }));
-        localStorage.removeItem('token'); // Ensure no token is stored
+            // Emit login event for pending approval
+            eventBus.emit('user-logged-in', pendingUserData)
 
-        // Optionally set a message, though redirect might be too fast for it to be seen for long
-        passwordError.value = 'Your account is pending approval. Redirecting to welcome page...';
-        
-        // Perform hard redirect to welcome page
-        // This was used previously and can be more robust for SPA guard interactions on initial unapproved login.
-        nextTick(() => {
-          window.location.href = '/welcome'; 
-        });
-        return; // Important to exit further error handling after redirect initiated
+            passwordError.value = 'Your account is pending approval. Redirecting to welcome page...'
+            router.push('/welcome')
+            return
+          }
+          showEmailError.value = true
+          passwordError.value = 'Invalid email or password'
+          break
 
-      } else if (serverMessage.includes('Invalid email or password') || serverMessage.includes('User not found')) {
-        showEmailError.value = true;
-        passwordError.value = 'Wrong password or email.';
-      } else {
-        // Other errors
-        passwordError.value = serverMessage || 'Login failed. Please try again.';
+        case 401:
+          showEmailError.value = true
+          passwordError.value = 'Invalid email or password'
+          break
+
+        case 403:
+          passwordError.value = 'Account is disabled or locked'
+          break
+
+        case 404:
+          showEmailError.value = true
+          passwordError.value = 'Account not found'
+          break
+
+        case 429:
+          passwordError.value = 'Too many login attempts. Please try again later'
+          break
+
+        case 500:
+          passwordError.value = 'Server error. Please try again later'
+          break
+
+        default:
+          passwordError.value = errorMessage || 'Login failed. Please try again'
       }
+    } else if (err.request) {
+      // Network error (no response received)
+      passwordError.value = 'Network error. Please check your connection and try again'
     } else {
-      // Network error or no err.response.data (e.g., CORS issue, server down)
-      passwordError.value = 'Login service unavailable or network issue. Please try again later.';
+      // Other errors
+      passwordError.value = 'An unexpected error occurred. Please try again'
     }
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 </script>
@@ -243,7 +251,7 @@ h2 {
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   position: relative;
 }
 
@@ -260,7 +268,7 @@ input {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1rem;
-  transition: border-color 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 input:focus {
@@ -278,12 +286,16 @@ input:focus {
   border-radius: 4px;
   font-size: 1rem;
   cursor: pointer;
-  margin-top: 1rem;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.2s ease;
 }
 
-.submit-btn:hover {
+.submit-btn:hover:not(:disabled) {
   background-color: #357abd;
+}
+
+.submit-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }
 
 .register-link {
@@ -325,24 +337,20 @@ input:focus {
   font-size: 0.9rem;
 }
 
-.submit-btn:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+.error-input {
+  border-color: #dc3545 !important;
+  background-color: #fff8f8 !important;
 }
 
 .field-error {
-  color: #c62828;
-  font-size: 0.85rem;
+  color: #dc3545;
+  font-size: 0.875rem;
   margin-top: 0.25rem;
-  display: block;
-  min-height: 1.2em;
 }
 
-.error-input {
-  border-color: #c62828 !important;
-}
-
-.error-input:focus {
-  box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.1) !important;
+.loading-message {
+  text-align: center;
+  color: #666;
+  margin-top: 1rem;
 }
 </style> 

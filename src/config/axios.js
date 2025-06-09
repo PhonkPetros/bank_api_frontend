@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { API_BASE_URL } from './api'
+import { logout } from '@/utils/sessionManager'
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -43,8 +44,8 @@ axiosInstance.interceptors.response.use(
     
     if (error.response?.status === 401) {
       console.warn('Response interceptor - 401 Unauthorized')
-      // Don't clear storage or redirect on 401, let the component handle it
-      // This prevents the infinite redirect loop
+      // Use centralized logout function
+      logout()
     }
     return Promise.reject(error)
   }

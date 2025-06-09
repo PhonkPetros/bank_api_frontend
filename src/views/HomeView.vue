@@ -9,13 +9,10 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
+import { logout } from '@/utils/sessionManager'
 
 const handleLogout = () => {
-  localStorage.removeItem('token')
-  router.push('/login')
+  logout()
 }
 </script>
 

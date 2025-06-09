@@ -72,7 +72,8 @@ const fetchTransfers = async () => {
   error.value = '';
   try {
     const res = await getAllTransactionsForEmployee();
-    transfers.value = res.data;
+    // Sort transfers by timestamp in descending order (most recent first)
+    transfers.value = res.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   } catch (err) {
     error.value = err.response?.data?.message || err.message || 'Failed to load transfers.';
   } finally {

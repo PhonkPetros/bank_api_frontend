@@ -1,7 +1,7 @@
 <template>
   <nav class="app-navbar">
     <div class="nav-left">
-      <template v-if="isLoggedIn && userRole === 'CUSTOMER'">
+      <template v-if="isLoggedIn && userRole === 'CUSTOMER' && userApproved">
         <router-link to="/customer/atm" class="nav-link">ATM</router-link>
         <router-link to="/customer/transfer" class="nav-link">Transfer</router-link>
       </template>
@@ -13,9 +13,19 @@
       </template>
     </div>
     <div class="nav-right">
-      <span v-if="isLoggedIn && userName" class="user-info">{{ userName }}</span>
-      <router-link v-if="!isLoggedIn" to="/login" class="nav-link">Login</router-link>
-      <button v-else @click="logout" class="logout-btn">Logout</button>
+      <template v-if="isLoggedIn">
+        <span class="user-info">
+          {{ userName }}
+          <span v-if="userRole === 'CUSTOMER' && !userApproved" class="approval-status pending">
+            (Pending Approval)
+          </span>
+        </span>
+        <button @click="handleLogout" class="logout-btn">Logout</button>
+      </template>
+      <template v-else>
+        <router-link to="/login" class="nav-link">Login</router-link>
+        <router-link to="/register" class="nav-link">Register</router-link>
+      </template>
     </div>
   </nav>
 </template>
@@ -24,41 +34,32 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEventBus } from '@/composables/useEventBus'
+import { getSession, logout, isAuthenticated, hasRole, isApproved } from '@/utils/sessionManager'
 
 const router = useRouter()
 const eventBus = useEventBus()
 const isLoggedIn = ref(false)
 const userRole = ref(null)
 const userName = ref('')
+const userApproved = ref(false)
 
 const updateUserState = () => {
-  const userString = localStorage.getItem('user')
-  if (userString) {
-    try {
-      const user = JSON.parse(userString)
-      isLoggedIn.value = true
-      userRole.value = user.role
-      userName.value = user.email
-    } catch (e) {
-      console.error('Error parsing user data:', e)
-      isLoggedIn.value = false
-      userRole.value = null
-      userName.value = ''
-    }
+  const { user } = getSession()
+  if (user) {
+    isLoggedIn.value = true
+    userRole.value = user.role
+    userName.value = user.email
+    userApproved.value = user.approved === true
   } else {
     isLoggedIn.value = false
     userRole.value = null
     userName.value = ''
+    userApproved.value = false
   }
 }
 
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  isLoggedIn.value = false
-  userRole.value = null
-  userName.value = ''
-  router.push('/login')
+const handleLogout = () => {
+  logout()
 }
 
 onMounted(() => {
@@ -67,11 +68,19 @@ onMounted(() => {
     isLoggedIn.value = true
     userRole.value = userData.role
     userName.value = userData.email
+    userApproved.value = userData.approved === true
+  })
+  eventBus.on('user-logged-out', () => {
+    isLoggedIn.value = false
+    userRole.value = null
+    userName.value = ''
+    userApproved.value = false
   })
 })
 
 onUnmounted(() => {
   eventBus.off('user-logged-in')
+  eventBus.off('user-logged-out')
 })
 </script>
 
@@ -124,5 +133,15 @@ onUnmounted(() => {
   color: #fff;
   font-size: 16px;
   margin-right: 8px;
+}
+.approval-status {
+  font-size: 0.8em;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.approval-status.pending {
+  background-color: #fff3cd;
+  color: #856404;
 }
 </style> 

@@ -2,7 +2,7 @@
   <div class="employee-dashboard">
     <header class="dashboard-header">
       <h1>Employee Dashboard</h1>
-      <button @click="logout" class="logout-button">Logout</button>
+      <button @click="handleLogout" class="logout-button">Logout</button>
     </header>
     <nav>
       <ul>
@@ -16,26 +16,12 @@
   </div>
 </template>
 
-<script>
-import { useRouter } from 'vue-router';
+<script setup>
+import { logout } from '@/utils/sessionManager'
 
-export default {
-  name: 'EmployeeDashboard',
-  setup() {
-    const router = useRouter();
-
-    const logout = () => {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      router.push('/login');
-    };
-
-    return {
-      logout,
-    };
-  },
-  // Add any necessary logic here, e.g., fetching initial data
-};
+const handleLogout = () => {
+  logout()
+}
 </script>
 
 <style scoped>

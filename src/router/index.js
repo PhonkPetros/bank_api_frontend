@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { isAuthenticated, hasRole, isApproved, clearSession } from '@/utils/sessionManager'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import WelcomeView from '../views/WelcomeView.vue'
@@ -17,12 +18,14 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: LoginView
+      component: LoginView,
+      meta: { requiresAuth: false }
     },
     {
       path: '/register',
       name: 'register',
-      component: RegisterView
+      component: RegisterView,
+      meta: { requiresAuth: false }
     },
     {
       path: '/employee/dashboard',
@@ -96,68 +99,60 @@ const router = createRouter({
 })
 
 // Navigation guard to check authentication and roles
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   console.log(`Navigating to: ${to.path}`, to.meta);
-  const token = localStorage.getItem('token');
-  const userString = localStorage.getItem('user');
-  let user = null;
-  try {
-    user = userString ? JSON.parse(userString) : {};
-  } catch (e) {
-    console.error("Error parsing user from localStorage", e);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    user = {};
-  }
-
-  const isLoggedIn = !!token;
-  const userRole = user && user.role ? user.role : null;
-  const isUserApproved = user && user.approved;
-  console.log(`User status: isLoggedIn=${isLoggedIn}, userRole=${userRole}, isUserApproved=${isUserApproved}`);
-
-  if (to.meta.requiresAuth) {
-    if (!isLoggedIn) {
-      console.log('Decision: Not logged in, redirecting to /login');
-      next('/login');
-    } else {
-      if (to.meta.role) {
-        if (userRole === to.meta.role) {
-          if (to.meta.role === 'CUSTOMER' && to.meta.requiresApproval && !isUserApproved) {
-            console.log('Decision: Role CUSTOMER, needs approval, not approved, redirecting to /welcome');
-            next('/welcome');
-          } else {
-            console.log('Decision: Auth ok, role match, proceeding.');
-            next();
-          }
-        } else {
-          console.log(`Decision: Role mismatch. Expected ${to.meta.role}, got ${userRole}. Redirecting to /login`);
-          next('/login'); 
-        }
-      } else if (to.meta.requiresApproval && !isUserApproved) {
-        console.log('Decision: Needs approval, not approved, redirecting to /welcome');
-        next('/welcome');
-      } else {
-        console.log('Decision: Auth ok, no specific role/approval conflict, proceeding.');
-        next();
+  
+  // Public routes that don't require authentication
+  const publicRoutes = ['/login', '/register', '/welcome'];
+  if (publicRoutes.includes(to.path)) {
+    // If user is already logged in, redirect based on role and approval status
+    if (isAuthenticated()) {
+      if (hasRole('EMPLOYEE')) {
+        return next('/employee/customer-management');
+      } else if (hasRole('CUSTOMER')) {
+        return next(isApproved() ? '/customer/atm' : '/welcome');
       }
     }
-  } else if (isLoggedIn && (to.path === '/login' || to.path === '/register')) {
-    console.log(`Decision: Logged in, trying to access ${to.path}. Redirecting based on role.`);
-    if (userRole === 'EMPLOYEE') {
-      console.log('Redirecting EMPLOYEE to /employee/customer-management');
-      next('/employee/customer-management');
-    } else if (userRole === 'CUSTOMER') {
-      const redirectTo = isUserApproved ? '/' : '/welcome';
-      console.log(`Redirecting CUSTOMER to ${redirectTo}`);
-      next(redirectTo);
-    } else {
-      console.log('Redirecting (unknown role) to /');
-      next('/');
-    }
-  } else {
-    console.log('Decision: Public route or no conflicting conditions, proceeding.');
-    next();
+    return next();
   }
+
+  // Check authentication for protected routes
+  if (to.meta.requiresAuth) {
+    if (!isAuthenticated()) {
+      console.log('Not authenticated, redirecting to login');
+      clearSession();
+      return next('/login');
+    }
+
+    // Check role requirements
+    if (to.meta.role && !hasRole(to.meta.role)) {
+      console.log(`Role mismatch. Required: ${to.meta.role}`);
+      return next('/login');
+    }
+
+    // For customers, check approval status
+    if (hasRole('CUSTOMER') && !isApproved()) {
+      console.log('Customer account not approved');
+      // Only allow access to welcome page
+      if (to.path !== '/welcome') {
+        return next('/welcome');
+      }
+    }
+  }
+
+  // Handle root path redirect
+  if (to.path === '/') {
+    if (!isAuthenticated()) {
+      return next('/login');
+    }
+    if (hasRole('EMPLOYEE')) {
+      return next('/employee/customer-management');
+    } else if (hasRole('CUSTOMER')) {
+      return next(isApproved() ? '/customer/atm' : '/welcome');
+    }
+  }
+
+  next();
 });
 
 export default router 
