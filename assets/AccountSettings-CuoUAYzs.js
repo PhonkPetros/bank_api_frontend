@@ -1,0 +1,1 @@
+import{_ as e,a as n,b as s,g as c}from"./index-DQsCC5S4.js";const o={name:"AccountSettings"},a={class:"account-settings"};function r(i,t,u,d,l,p){return c(),n("div",a,t[0]||(t[0]=[s("h2",null,"Account Settings",-1),s("p",null,"Update transfer limits and close customer accounts.",-1)]))}const f=e(o,[["render",r],["__scopeId","data-v-b114cf7a"]]);export{f as default};
